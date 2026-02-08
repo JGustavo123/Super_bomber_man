@@ -1,11 +1,13 @@
 import pygame
 import random
 import math
+import os
 
 # Inicialização
 pygame.init()
 largura, altura = 1280, 768 
 tela = pygame.display.set_mode((largura, altura))
+pygame.display.set_caption("Super Bomberman - Gabimaru Edition")
 relogio = pygame.time.Clock()
 
 # Objetos de texto
@@ -18,6 +20,30 @@ GRAMA, PEDRA, MADEIRA, FOGO = (34, 139, 34), (80, 80, 80), (139, 69, 19), (255, 
 P1_COR, BOT_COR = (30, 30, 155), (200, 0, 200)
 BRANCO, PRETO, VERDE_ITEM = (255, 255, 255), (0, 0, 0), (50, 200, 50)
 VERDE_BTN, VERMELHO_BTN = (40, 180, 40), (180, 40, 40)
+
+# Carregamento das sprites 
+try:
+    def carregar(nome, tamanho=(56, 56)):
+        img = pygame.image.load(os.path.join("sprites", nome)).convert_alpha()
+        return pygame.transform.scale(img, tamanho)
+
+    # Sprites do Jogador
+    p1_frente = carregar("Gabimaru_frente.png")
+    p1_costas = carregar("Gabimaru_costa.png") 
+    p1_direita = carregar("Gabimaru_direita.png")
+    p1_esquerda = carregar("Gabimaru_esquerda.png")
+    
+    # Texturas do Mapa
+    sprite_pedra = carregar("bloco_indestrutivel.png", (64, 64))
+    sprite_madeira = carregar("caixa_madeira.png", (64, 64))
+    sprite_grama = carregar("grama.png", (64, 64))
+    
+    tem_sprites = True
+    sprite_atual = p1_frente
+except Exception as e:
+    print(f"Erro ao carregar arquivos: {e}")
+    tem_sprites = False
+    sprite_atual = None
 
 # Configurações do Mapa
 tile_size = 64
@@ -34,6 +60,7 @@ def resetar_jogo():
     # Status iniciais equilibrados
     p1_status = {"bombas_max": 1, "alcance": 2, "velocidade": 180, "itens_v": 0} 
     
+    # Zonas seguras para evitar spawn preso
     zonas_seguras = [(1,1), (1,2), (2,1), (1,13), (1,12), (2,13), (9,1), (8,1), (9,2), (9,13), (9,12), (8,13)]
     
     mapa_jogo = []
@@ -89,10 +116,12 @@ def disparar_explosao(lin, col, alcance):
                         itens.append({"pos": [nl, nc], "tipo": tipo})
                     break
 
-# O jogo começa na tela de Menu (0)
+# O jogo começa na tela de Menu
 sala = 0 
 resetar_jogo()
 rodando = True
+ultima_direcao = "baixo"
+tempo_mov_p1 = 0
 
 while rodando:
     agora = pygame.time.get_ticks()
@@ -120,12 +149,18 @@ while rodando:
         teclas = pygame.key.get_pressed()
         if agora - tempo_mov_p1 > p1_status["velocidade"]:
             nl, nc = p1_pos[0], p1_pos[1]
-            if teclas[pygame.K_UP]: nl -= 1
-            elif teclas[pygame.K_DOWN]: nl += 1
-            elif teclas[pygame.K_LEFT]: nc -= 1
-            elif teclas[pygame.K_RIGHT]: nc += 1
+            if teclas[pygame.K_UP]: nl -= 1; ultima_direcao = "cima"
+            elif teclas[pygame.K_DOWN]: nl += 1; ultima_direcao = "baixo"
+            elif teclas[pygame.K_LEFT]: nc -= 1; ultima_direcao = "esquerda"
+            elif teclas[pygame.K_RIGHT]: nc += 1; ultima_direcao = "direita"
             if [nl, nc] != p1_pos and esta_livre(nl, nc):
                 p1_pos = [nl, nc]; tempo_mov_p1 = agora
+        
+        if tem_sprites:
+            if ultima_direcao == "cima": sprite_atual = p1_costas
+            elif ultima_direcao == "baixo": sprite_atual = p1_frente
+            elif ultima_direcao == "esquerda": sprite_atual = p1_esquerda
+            else: sprite_atual = p1_direita
 
         for item in itens[:]:
             if item["pos"] == p1_pos:
@@ -134,31 +169,23 @@ while rodando:
                 elif item["tipo"] == "B": p1_status["bombas_max"] += 1 
                 itens.remove(item)
 
-        # IA de Sobrevivência Real
+        # IA de Sobrevivência
         for bot in bots:
             if agora - bot["last"] > 550:
-                l, c = bot["pos"]
-                direcoes = [(0,1), (0,-1), (1,0), (-1,0)]
+                l, c = bot["pos"]; direcoes = [(0,1), (0,-1), (1,0), (-1,0)]
                 possiveis = [d for d in direcoes if esta_livre(l + d[0], c + d[1])]
                 seguras = [d for d in possiveis if not eh_perigoso(l + d[0], c + d[1])]
-
-                if eh_perigoso(l, c):
-                    escolha = random.choice(seguras) if seguras else (random.choice(possiveis) if possiveis else (0,0))
+                if eh_perigoso(l, c): escolha = random.choice(seguras) if seguras else (random.choice(possiveis) if possiveis else (0,0))
                 else:
                     if seguras:
-                        if bot["dir"] in seguras and random.random() < 0.8:
-                            escolha = bot["dir"]
+                        if bot["dir"] in seguras and random.random() < 0.8: escolha = bot["dir"]
                         else:
-                            escolha = seguras[0]
-                            d_min = 1000
+                            escolha = seguras[0]; d_min = 1000
                             for d in seguras:
                                 dist = math.sqrt((l+d[0]-p1_pos[0])**2 + (c+d[1]-p1_pos[1])**2)
                                 if dist < d_min: d_min = dist; escolha = d
                     else: escolha = (0,0)
-
-                bot["dir"] = escolha
-                bot["pos"] = [l + escolha[0], c + escolha[1]]; bot["last"] = agora
-
+                bot["dir"] = escolha; bot["pos"] = [l + escolha[0], c + escolha[1]]; bot["last"] = agora
                 if not eh_perigoso(l, c) and seguras and random.random() < 0.08:
                     bombas.append([l, c, agora, "bot", bot["alcance"]])
 
@@ -171,36 +198,63 @@ while rodando:
                 if f[0] == bot["pos"][0] and f[1] == bot["pos"][1]: bots.remove(bot)
         if len(bots) == 0: sala = 4
 
-    # --- DESENHO ---
+    # Desenho
     tela.fill((30, 30, 30))
     if sala == 0:
         tela.blit(fonte_titulo.render("SUPER BOMBERMAN", True, BRANCO), (largura//2-350, 200))
         pygame.draw.rect(tela, VERDE_BTN, (440, 350, 400, 100), border_radius=15)
         tela.blit(fonte_txt.render("JOGAR", True, BRANCO), (largura//2-40, 388))
     elif sala == 2:
-        status = f"Bombas: {p1_status['bombas_max']}  Alcance: {p1_status['alcance']}  Velocidade: {p1_status['itens_v']}"
-        tela.blit(fonte_txt.render(status, True, BRANCO), (off_x, 25))
-        tela.blit(fonte_txt.render(f"Vivos: {len(bots)+1}", True, BRANCO), (off_x + 700, 25))
-        pygame.draw.rect(tela, GRAMA, (off_x, off_y, mapa_l*tile_size, mapa_a*tile_size))
+        status_txt = f"Bombas: {p1_status['bombas_max']}  Alcance: {p1_status['alcance']}  Velocidade: {p1_status['itens_v']}"
+        tela.blit(fonte_txt.render(status_txt, True, BRANCO), (off_x, 25))
+        
+        # Desenha o Chão
         for l in range(mapa_a):
             for c in range(mapa_l):
                 px, py = off_x + c * tile_size, off_y + l * tile_size
-                if mapa_jogo[l][c] == 1: pygame.draw.rect(tela, PEDRA, (px, py, tile_size-2, tile_size-2))
-                elif mapa_jogo[l][c] == 2: pygame.draw.rect(tela, MADEIRA, (px, py, tile_size-2, tile_size-2))
+                if tem_sprites:
+                    tela.blit(sprite_grama, (px, py))
+                else:
+                    pygame.draw.rect(tela, GRAMA, (px, py, tile_size, tile_size))
+        
+        # Desenha as Paredes e Madeiras por cima
+        for l in range(mapa_a):
+            for c in range(mapa_l):
+                px, py = off_x + c * tile_size, off_y + l * tile_size
+                if mapa_jogo[l][c] == 1: # PEDRA
+                    if tem_sprites: tela.blit(sprite_pedra, (px, py))
+                    else: pygame.draw.rect(tela, PEDRA, (px, py, tile_size-2, tile_size-2))
+                elif mapa_jogo[l][c] == 2: # MADEIRA
+                    if tem_sprites: tela.blit(sprite_madeira, (px, py))
+                    else: pygame.draw.rect(tela, MADEIRA, (px, py, tile_size-2, tile_size-2))
+        
         for it in itens:
             ix, iy = off_x + it["pos"][1]*tile_size + 12, off_y + it["pos"][0]*tile_size + 12
             pygame.draw.rect(tela, VERDE_ITEM, (ix, iy, 40, 40), border_radius=5)
             tela.blit(fonte_item.render(it["tipo"], True, PRETO), (ix + 15, iy + 10))
-        for b in bombas: pygame.draw.circle(tela, PRETO, (off_x + b[1]*tile_size + 32, off_y + b[0]*tile_size + 32), 20)
+            
+        # Desenho das Bombas Pulsantes
+        for b in bombas: 
+            variacao = math.sin(pygame.time.get_ticks() * 0.01) * 5
+            raio_din = 22 + int(variacao)
+            pygame.draw.circle(tela, PRETO, (off_x + b[1]*tile_size + 32, off_y + b[0]*tile_size + 32), raio_din)
+            pygame.draw.circle(tela, (60, 60, 60), (off_x + b[1]*tile_size + 28, off_y + b[0]*tile_size + 28), raio_din // 3)
+
         for e in explosoes: pygame.draw.rect(tela, FOGO, (off_x + e[1]*tile_size, off_y + e[0]*tile_size, tile_size, tile_size))
-        pygame.draw.rect(tela, P1_COR, (off_x + p1_pos[1]*tile_size+12, off_y + p1_pos[0]*tile_size+12, 40, 40))
+        
+        if tem_sprites and sprite_atual:
+            tela.blit(sprite_atual, (off_x + p1_pos[1]*tile_size + 4, off_y + p1_pos[0]*tile_size + 4))
+        else:
+            pygame.draw.rect(tela, P1_COR, (off_x + p1_pos[1]*tile_size+12, off_y + p1_pos[0]*tile_size+12, 40, 40))
         for bot in bots: pygame.draw.rect(tela, BOT_COR, (off_x + bot["pos"][1]*tile_size+12, off_y + bot["pos"][0]*tile_size+12, 40, 40))
+            
     elif sala in [3, 4]:
         msg = "DERROTA!" if sala == 3 else "VITÓRIA!"
         tela.fill((50, 0, 0) if sala == 3 else (0, 50, 0))
         tela.blit(fonte_titulo.render(msg, True, BRANCO), (largura//2-180, 200))
         pygame.draw.rect(tela, BRANCO, (440, 450, 400, 80), 2, border_radius=10)
         tela.blit(fonte_txt.render("VOLTAR AO MENU", True, BRANCO), (largura//2-100, 478))
+
     pygame.display.flip()
     relogio.tick(60)
 pygame.quit()
