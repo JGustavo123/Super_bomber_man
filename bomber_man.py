@@ -23,8 +23,8 @@ P1_COR, P2_COR, BOT_COR = (30, 30, 155), (200, 30, 30), (200, 0, 200)
 BRANCO, PRETO, VERDE_ITEM = (255, 255, 255), (0, 0, 0), (50, 200, 50)
 AZUL_BOTAO, AZUL_TEXTO = (20, 40, 80), (150, 200, 255)
 
-# --- SISTEMA DE ÁUDIO ---
-volume_global = 0.4
+# Audio (eu mudei o volume global para 0.5 pra ouvir melhor)
+volume_global = 0.5
 musica_atual = ""
 
 try:
@@ -61,7 +61,7 @@ try:
 except Exception as e:
     print(f"Erro no áudio: {e}")
 
-# --- CARREGAMENTO DE SPRITES ---
+# Carregamento das sprites
 try:
     def carregar(nome, tamanho=(56, 56)):
         caminho = os.path.join("sprites", nome)
@@ -88,7 +88,7 @@ except Exception as e:
     print(f"Erro sprites: {e}")
     tem_sprites = False
 
-# Configurações do mapa e layout
+# Configurações do mapa
 tile_size = 64
 mapa_l, mapa_a = 15, 11
 off_x = (largura - (mapa_l * tile_size)) // 2
@@ -155,8 +155,7 @@ def disparar_explosao(lin, col, alcance):
                         itens.append({"pos": [nl, nc], "tipo": random.choice(["A", "V", "B"])})
                     break
 
-# --- VARIÁVEIS DE ESTADO E CONTROLE ---
-sala = 0  # 0: Menu, 1: Seleção de Modo, 2: Jogo, 7: Ajustes
+sala = 0  
 modo_jogo = ""
 rodando = True
 ultima_dir_p1 = "baixo"
@@ -212,13 +211,12 @@ while rodando:
                             bombas.append([p2_pos[0], p2_pos[1], agora, "p2", p2_status["alcance"]])
                             if som_creeper: som_creeper.play()
 
-    # Slider de Volume (Sala 7)
     if sala == 7 and pygame.mouse.get_pressed()[0]:
         if rect_slider_fundo.inflate(0, 20).collidepoint(pos_mouse):
             volume_global = max(0, min(1, (pos_mouse[0] - rect_slider_fundo.x) / rect_slider_fundo.width))
             atualizar_volumes()
         
-        # --- CONTROLE DE MÚSICA POR SALA ---
+    # Separação da musica por sala
     if sala in [0, 1, 7]: 
         tocar_musica(musica_menu)
     elif sala == 2: 
@@ -228,7 +226,6 @@ while rodando:
     elif sala in [4, 5]: 
         tocar_musica(musica_vitoria, loop=0)
 
-    # --- LÓGICA DO JOGO (SALA 2) ---
     if sala == 2:
         teclas = pygame.key.get_pressed()
         
@@ -302,7 +299,6 @@ while rodando:
             elif not p1_status["vivo"]: sala = 6
             elif not p2_status["vivo"]: sala = 5
 
-    # --- DESENHO FINAL ---
     tela.fill((30, 30, 30))
     
     if sala == 0:
